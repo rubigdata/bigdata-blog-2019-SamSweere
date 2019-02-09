@@ -5,6 +5,7 @@ This is a sample blog using Markdown. Edit this file in order to create your own
 Some useful features in markdown are:
 - bulleted lists
 - of multiple items
+  - and even sub bulletpoints
 
 # Headers
 
