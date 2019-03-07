@@ -117,3 +117,136 @@ A thing to note is that the Wordcount code is that if an previous output folder 
 ```
 bin/hdfs dfs -rm -r -f /user/root/output
 ```
+
+### The code
+The two two crucial functions of every Map-Reduce program are the `map` and the `reduce`. For the wordcount they look like:
+```
+public void map(Object key, Text value, Context context
+                    ) throws IOException, InterruptedException {
+      StringTokenizer itr = new StringTokenizer(value.toString());
+      while (itr.hasMoreTokens()) {
+        word.set(itr.nextToken());
+        context.write(word, one);
+      }
+    }
+```
+
+```
+public void reduce(Text key, Iterable<IntWritable> values,
+                       Context context
+                       ) throws IOException, InterruptedException {
+      int sum = 0;
+      for (IntWritable val : values) {
+        sum += val.get();
+      }
+      result.set(sum);
+      context.write(key, result);
+    }
+```
+
+Any Map-Reduce program starts with the distributing the mapping code to all the eligable datanodes. The mapping code will search for something (the key) and counts the amount of it (the value). It will save this in a `(key, value)` pair. In the case of the word count the mapping code on the datanode iterates over it's part of the input text and saves every word (the key) with an occurence of 1 (the value). This will look something like:
+
+`Mapper 1`
+```
+...
+(vision, 1)
+(us, 1)
+(stumbled, 1)
+(us ,1)
+...
+```
+
+`Mapper 2`
+```
+...
+(anti, 1)
+(us, 1)
+(perplexed, 1)
+(vision, 1)
+...
+```
+
+Next is the Shuffle and Sort phase, here the key-value pairs that where generated in the map phase are first sorted in alphabetical order and then grouped if the keys are the same:
+
+`Mapper 1`
+```
+...
+(stumbled, 1)
+(us, 2)
+(vision, 1)
+...
+```
+
+`Mapper 2`
+```
+...
+(anti, 1)
+(perplexed, 1)
+(us, 1)
+(vision, 1)
+...
+```
+
+Next in the shuffeling phase, this assigns every key to a reducer. Finally the every reducer sums all the same keys and saves this to the output:
+
+`Reducer 1`
+```
+(stumbled, 1)
+```
+
+`Reducer 2`
+```
+(us, 2)
+(us, 1)
+--------
+(us, 3)
+```
+Etc.
+
+# Romeo and Juliet name occurences
+In this part of the assignment we have to find if the name 'Romeo' or 'Juliet' appears more often in the *Complete Shakespeare*. One way to do this is to look at the output of the wordcount and find all the occurences of 'Romeo' and 'Juliet' with the `grep` command:
+
+```
+cat part-r-00000 | grep "Juliet"
+```
+This rerturns:
+```
+'Juliet.']	1
+Juliet	        17
+Juliet!	        1
+Juliet's	8
+...
+```
+Thus the wordcount output contains multiple different occurences of the name Juliet. It is even case-sensitive:
+```
+cat part-r-00000 | grep "Juliet"
+```
+Returns:
+```
+JULIET	4
+JULIET,	2
+JULIET.	125
+JULIET]	1
+```
+
+One way to solve this problem is to write a bash script that finds all the possible versions of one name and adds these together. But we can also change the mapper code to only take into account Romeo or Juliet without being case/special charactars sensitive:
+```
+public void map(Object key, Text value, Context context
+                    ) throws IOException, InterruptedException {
+      StringTokenizer itr = new StringTokenizer(value.toString());
+      while (itr.hasMoreTokens()) {
+        String s = itr.nextToken;
+        if(s.toLowerCase().contains("romeo")){
+            //We now know that the word contains romeo
+            word.set("Romeo");
+            context.write(word, one);
+        }
+        if(s.toLowerCase().contains("juliet"))
+            //We now know that the word contains juliet
+            word.set("Juliet");
+            context.write(word, one);
+        }
+      }
+    }
+```
+
