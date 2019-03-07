@@ -1,5 +1,4 @@
-# Welcome on my Big Data blog
+# Assignments:
 
-## Assignment 1
-
-## [Assignment 2](Assignment2.md)
+- ## Assignment 1
+- ## [Assignment 2](Assignment2.md)
