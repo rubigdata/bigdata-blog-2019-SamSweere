@@ -205,7 +205,7 @@ Etc.
 
 If we want to calculate the number of lines/characters/etc. we only have to change the key in the mapper program. For example if we want to know the total number of lines we change the key to be 'a line'.  
 
-# Romeo and Juliet name occurences
+### Romeo and Juliet name occurences
 In this part of the assignment we have to find if the name 'Romeo' or 'Juliet' appears more often in the *Complete Shakespeare*. One way to do this is to look at the output of the wordcount and find all the occurences of 'Romeo' and 'Juliet' with the `grep` command:
 
 ```
