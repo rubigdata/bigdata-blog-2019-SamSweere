@@ -4,8 +4,7 @@ In this assignment we will implement a Map-Reduce program on an HDFS (Hadoop Dis
 
 ## Setup
 
-First the docker image was downloaded from the docker cloud. This docker image contained Hadoop version 2.9.2.
-Next the HDFS  was initialized. We first format the hdfs, this ensures us that we don't accedentaly use a previous installation. This is done by running:
+First the docker image with linux and Hadoop version 2.9.2 is downloaded from docker cloud. Next the HDFS  was initialized. We first format the HDFS, this ensures us that we don't accidentally use a filesystem from a previous installation. This is done by running:
 ```
 bin/hdfs namenode -format
 ```
@@ -15,19 +14,19 @@ We can now start the HDFS by running:
 sbin/start-dfs.sh
 ```
 
-Now we have the HDFS running it is time to make some directories. For this assignment we will work from the `/user/root` directory. Thou we first have to create those directories. Since these will be inside the HDFS we have to call `dfs` before the `mkdir` command. This is a repeating pattern, to do anything withing the HDFS we always have to run `dfs` first. The directories are made using:
+We now have the HDFS running, it is time to make some directories. For this assignment we will work from the `/user/root` directory. Though we first have to create those directories. Since these will be inside the HDFS we have to call `dfs` before the `mkdir` command. This is a repeating pattern, to do anything withing the HDFS we always have to run `dfs` first. The directories are made using:
 ```
 bin/hdfs dfs -mkdir /user
 bin/hdfs dfs -mkdir /user/root
 ```
 
-The HDFS can be stopped by running:
+When we are done we can stop the HDFS with:
 ```
 sbin/stop-dfs.sh
 ```
 
 ## Pseudo-Distributed Operation
-In this assignment we run Hadoop pseudo-distributed. This means that we emulate a cluster on one machine (each Hadoop daemon runs in a separate Java process). There are two files that create this pseudo-distributed operation setup.
+In this assignment we run Hadoop pseudo-distributed. This means that we emulate a cluster on one machine (each Hadoop daemon runs in a separate Java process). There are two files that create this pseudo-distributed operation setup:
 
 `core-site.xml`:
 
@@ -51,10 +50,10 @@ This sets the namenode on localhost with port 9001.
     </property>
 </configuration>
 ```
-This defines the desired replication to 1. In real world usages you would usualy want this number to be at least 3. But since we are only simulating it localy 1 will suffice.
+This defines the desired replication to 1. In real world usages you would usually want this number to be at least 3. But since we are only simulating it locally 1 will suffice.
 
 ## Dataset
-The data we will use to test our Map-Reduce algorithm will be the *Complete Shakespeare*. We can download this from the github of this course:
+The data we will use to test our Map-Reduce algorithm will be the *Complete Shakespeare*. We can download this from the course github:
 
 ```
 wget https://raw.githubusercontent.com/rubigdata-dockerhub/hadoop-dockerfile/master/100.txt
@@ -65,27 +64,27 @@ Next we have to set this data as the input for our Map-Reduce program:
 bin/hdfs dfs -put 100.txt input
 ```
 
-## Wordcount
-The Map-Reduce program we are going to work with will be a word counter. The basis of this program will be taken from [Hadoop's example code](https://hadoop.apache.org/docs/r2.9.2/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html#Example:_WordCount_v1.0). The wordcount code is put into `Wordcount.java`.
+# Wordcount
+The Map-Reduce program we are going to work with will be a word counter. The basis of this program will be taken from [Hadoop's example code](https://hadoop.apache.org/docs/r2.9.2/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html#Example:_WordCount_v1.0). The wordcount code is put into the file `Wordcount.java`.
 
-### Setup
-First we have to setup the enviroment vairables:
+## Setup
+Before we compile the `Wordcount.java` program we first have to setup the environment variables:
 ```
 export HADOOP_CLASSPATH=${JAVA_HOME}/lib/tools.jar
 ```
 
-We can now compile `Wordcount.java` and creat a jar (Java Archive):
+We can now compile `Wordcount.java` and create a jar (Java Archive):
 ```
 bin/hadoop com.sun.tools.javac.Main WordCount.java
 jar cf wc.jar WordCount*.class
 ```
-Finally we can run the code:
+Finally we can run the code with:
 ```
 bin/hadoop jar wc.jar WordCount input output
 ```
 
-### Reading and resetting output
-Since the Wordcount Map-Reduce program will run on the Hadoop cluster the output will also be storen on the HDFS. To examine the output we can first copy the output of the Wordcount from the HDFS to our local (client) machine using the `dfs -get` command:
+## Reading and resetting output
+Since the Wordcount Map-Reduce program will run on the Hadoop cluster the output will also be stored on the HDFS. To examine the output we can first copy the output of the wordcount program from the HDFS to our local (client) machine using the `dfs -get` command:
 
 ```
 bin/hdfs dfs -get output output
@@ -95,7 +94,7 @@ We can now examine the output by running:
 ```
 cat output/part-r-00000
 ```
-This will show all the words and the corresponding amount of occurences in *Complete Shakespeare*:
+This will show all the words and the corresponding amount of occurrences in *Complete Shakespeare*:
 
 ```
 ...
@@ -108,18 +107,16 @@ unnatural;	1
 unnaturally	1
 ...
 ```
-Note that the Wordcount program doesn't take punctuation marks and interrobang (?!:() etc) into account.
+Note that the Wordcount program doesn't take punctuation marks and interrobang (?!:; etc) into account.
 
-
-
-A thing to note is that the Wordcount code is that if an previous output folder already exitst it will throw an error. In order to be able to run the wordcount code again we have to remove the previous output folder. This can be done using:
+When running a program multiple times on the HDFS cluster we can get an error that the output folder already exists. This is because a previous execution of the program will already have created the output folder.  In order to be able to run the wordcount code again we have to remove the previous output folder. This can be done using:
 
 ```
 bin/hdfs dfs -rm -r -f /user/root/output
 ```
 
-### The code
-The two two crucial functions of every Map-Reduce program are the `map` and the `reduce`. For the wordcount they look like:
+## The code
+The two two crucial functions of every Map-Reduce program are the `map` and the `reduce` functions. For the `Wordcount.java` they look like:
 ```
 public void map(Object key, Text value, Context context
                     ) throws IOException, InterruptedException {
@@ -144,7 +141,7 @@ public void reduce(Text key, Iterable<IntWritable> values,
     }
 ```
 
-Any Map-Reduce program starts with the distributing the mapping code to all the eligable datanodes. The mapping code will search for something (the key) and counts the amount of it (the value). It will save this in a `(key, value)` pair. In the case of the word count the mapping code on the datanode iterates over it's part of the input text and saves every word (the key) with an occurence of 1 (the value). This will look something like:
+Any Map-Reduce program starts with the distributing the mapping code to all the eligible datanodes. The mapping code will search for something (the key) and counts the amount of it (the value). It will save this in a `(key, value)` pair. In this case the wordcount mapping code on the datanode iterates over it's part of the input text and saves every word (the key) with an occurrence of 1 (the value). This will look something like:
 
 `Mapper 1`
 ```
@@ -187,7 +184,7 @@ Next is the Shuffle and Sort phase, here the key-value pairs that where generate
 ...
 ```
 
-Next in the shuffeling phase, this assigns every key to a reducer. Finally the every reducer sums all the same keys and saves this to the output:
+Next in the shuffling phase, this assigns every key to a reducer. Finally the every reducer sums all the same keys and saves this to the output:
 
 `Reducer 1`
 ```
@@ -203,10 +200,10 @@ Next in the shuffeling phase, this assigns every key to a reducer. Finally the e
 ```
 Etc.
 
-If we want to calculate the number of lines/characters/etc. we only have to change the key in the mapper program. For example if we want to know the total number of lines we change the key to be 'a line'.  
+If we want to calculate the number of lines/characters/etc. instead of words we only have to change the key in the mapper program. For example if we want to know the total number of lines we change the key to be 'a line'.  
 
 ## Romeo and Juliet name occurences
-In this part of the assignment we have to find if the name 'Romeo' or 'Juliet' appears more often in the *Complete Shakespeare*. One way to do this is to look at the output of the wordcount and find all the occurences of 'Romeo' and 'Juliet' with the `grep` command:
+In this part of the assignment we have to find if the name Romeo or Juliet appears more often in the *Complete Shakespeare*. One way to do this is to look at the output of the wordcount and find all the occurrences of 'Romeo' and 'Juliet' with the `grep` command:
 
 ```
 cat part-r-00000 | grep "Juliet"
@@ -219,7 +216,7 @@ Juliet!	        1
 Juliet's	8
 ...
 ```
-Thus the wordcount output contains multiple different occurences of the name Juliet. It is even case-sensitive:
+Thus the wordcount output contains multiple different occurrences of the name Juliet. It is even case-sensitive:
 ```
 cat part-r-00000 | grep "Juliet"
 ```
@@ -231,7 +228,7 @@ JULIET.	125
 JULIET]	1
 ```
 
-One way to solve this problem is to write a bash script that finds all the possible versions of one name and adds these together. But we can also change the mapper code to only take into account Romeo or Juliet without being case/special charactars sensitive:
+One way to solve this problem is to write a bash script that finds all the possible versions of one name and adds these together. But we can also change the mapper code to only take into account Romeo or Juliet without being case/special characters sensitive:
 ```
 public void map(Object key, Text value, Context context
                     ) throws IOException, InterruptedException {
@@ -257,4 +254,4 @@ Running this new program returns the output:
 Juliet	206
 Romeo	313
 ```
-Thus there are more uccurences of the name Romeo than of Juliet.
+Thus there are more occurrences of the name Romeo than of Juliet.
