@@ -79,7 +79,7 @@ It is clear that the subject are verry diverse, from etnicity to non-working job
 
 ## Goal
 Before we start working with the dataset more we first need some goals for this project in increasing difficulty:
-  * In which neighborhood in Nijmegen do most children younger than 10 live?
+  * In which neighborhood in Nijmegen do most youth (age <= 18) live in the year 2012?
   * What is the richest neighboorhood in Nijmegen based on income?
   * Is there a correlation between the income of a neighboorhood and the ammount of public artworks within that nieghboorhood?
 
@@ -211,8 +211,171 @@ root
 ```
 This looks perfect!
 
+## Kids
+Lets tackle our first goal: In which neighborhood in Nijmegen do most youth (age <= 18) live in the year 2012?
 
+First we can filter on the year:
+```scala
+val only2012 = nijmData.filter("year = 2012")
+```
+Next we have to find the `subject` we want to use. In this case we want the subject to involve age ("leeftijd" in Dutch).
+```scala
+val containsAge = nijmData.filter($"subject".contains("leeftijd") || $"subject".contains("Leeftijd"))
+containsAge.groupBy("subject").count().show()
+```
+Results
+```
++--------------------+-----+
+|             subject|count|
++--------------------+-----+
+|Geslacht en leeftijd|77760|
++--------------------+-----+
+```
+Looks like we got the right subject. Next lets look at the groups within this subject.
+```scala
+containsAge.groupBy("group").count().show()
+```
+Results
+```
++--------------------+-----+
+|               group|count|
++--------------------+-----+
+|geslacht naar lee...| 8100|
+|      leeftijd (3kl)|  270|
+|geslacht naar lee...|29160|
+|geslacht naar lee...| 4860|
+|leeftijd (jeugd_5kl)| 4050|
+|            geslacht| 1620|
+|geslacht naar lee...| 8100|
+|geslacht naar lee...|  540|
+|     leeftijd (18kl)|14580|
+|leeftijd (jeugd_3kl)| 2430|
+|      leeftijd (5kl)| 4050|
++--------------------+-----+
+```
+Good news! The database as entries specificly for the youth ("jeugd" in Dutch) lets see what is in the group `leeftijd (jeugd_5kl)`.
+```scala
+val ageYouth = only2012.filter("group = 'leeftijd (jeugd_5kl)'")
+ageYouth.groupBy("label").count()
+```
+Results
+```
++-----+-----+
+|label|count|
++-----+-----+
+|13-18|   45|
+|  2-3|   45|
+|19-24|   45|
+| 4-12|   45|
+|  0-1|   45|
++-----+-----+
+```
+This looks like what we want to have. To be sure lets take a sample.
+```scala
+ageYouth.sample(true,0.06).show()
+```
+Returns
+```
++-----+--------------------+--------------------+-----+--------------------+----+
+|value|             subject|               group|label|             quarter|year|
++-----+--------------------+--------------------+-----+--------------------+----+
+|  2.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  0-1|    Ooyse Schependom|2012|
+|105.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  0-1|           Grootstal|2012|
+|  0.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  0-1|Haven- industriet...|2012|
+|138.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  0-1|             De Kamp|2012|
+|  2.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  0-1|              Ressen|2012|
+| 99.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|  2-3|          Zwanenveld|2012|
+|430.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)| 4-12|           Nije Veld|2012|
+|324.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)| 4-12|           Meijhorst|2012|
+|343.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)| 4-12|           Weezenhof|2012|
+|595.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)| 4-12|            't Acker|2012|
+|155.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|13-18|             Goffert|2012|
+|197.0|Geslacht en leeftijd|leeftijd (jeugd_5kl)|19-24|            Aldenhof|2012|
++-----+--------------------+--------------------+-----+--------------------+----+
+```
+Lets see where the most youth lives, by first filtering out the `19-24` label. Then grouping by the `quarter` taking the sum of all the youth living in that `quarter`. Finally we show the outcome in descending order:
+```scala
+val youthQuarters = ageYouth.filter("label != '19-24'").groupBy("quarter").agg(sum("value"))
+.withColumnRenamed("sum(value)","count")
+youthQuarters.orderBy(desc("count")).show(10)
+```
+Returns
+```
++--------------+------+
+|       quarter| count|
++--------------+------+
+|    Oosterhout|2156.0|
+|          Lent|1758.0|
+|        Hatert|1544.0|
+|Neerbosch-Oost|1483.0|
+|      't Acker|1332.0|
+|       De Kamp|1252.0|
+|     Hengstdal|1251.0|
+|     Hazenkamp|1246.0|
+|      Heseveld|1186.0|
+|     Wolfskuil|1123.0|
++--------------+------+
+```
+Thus in 2012 in the neighboorhood of Oosterhout (next to Lent) the most youth was living.
 
-This will be done using the following datasets:
-* BAG dataset (https://www.nijmegen.nl/opendata/BAG_ADRES.csv)
+## Wealth
+Our seccond goal was: What is the richest neighboorhood in Nijmegen based on income?
 
+In this chapter I will not explain every step I took but only show the querry that I used to get to the awnser. The method is exaclty the same as the previous chapter.
+
+Lets first see what years have income data:
+```scala
+nijmData.filter($"subject".contains("Inkomen")).groupBy("year").count().show()
+```
+Returns
+```
++----+-----+
+|year|count|
++----+-----+
+|2007| 1454|
+|2009| 1440|
+|2008| 1437|
++----+-----+
+```
+Okay, thus only a limited choise of years. Let's pick 2009 as the year.
+
+After doing some research on the different `subjects`,`group` and `label` to choose from I decided to pick the average personal income per neighbourhood. 
+
+```scala
+var incomeQuarters = nijmData.filter("year = 2009")
+                             .filter("subject = 'Inkomen, algemeen'")
+                             .filter("label = 'inwoners (bedrag)'")
+                             .groupBy("quarter")
+                             .agg(sum("value"))
+                             .withColumnRenamed("sum(value)", "Average income")
+
+incomeQuarters.orderBy(desc("Average income")).show(10)
+```
+Results
+```
++------------+--------------+
+|     quarter|Average income|
++------------+--------------+
+| Kwakkenberg|       29600.0|
+|  Hunnerberg|       29300.0|
+|   Hazenkamp|       26100.0|
+|   Weezenhof|       25900.0|
+|  Galgenveld|       24900.0|
+|  Oosterhout|       23600.0|
+|     Altrade|       23000.0|
+|    St. Anna|       22700.0|
+|Brakkenstein|       22500.0|
+|        Hees|       22500.0|
++------------+--------------+
+```
+Thus the richest neighboorhood in Nijmegen is Kwakkenberg.
+
+## Correlation income and public art
+The last goal: Is there a correlation between the income of a neighboorhood and the ammount of public artworks within that nieghboorhood? I will also take the year 2009 for this goal.
+
+In order to be able to answer this goal we need to combine three datasets:
+  * The dataset we have been working on thusfar: The statistical dataset until 2017 from the province of Nijmegen ([Link](https://opendata.nijmegen.nl/dataset/statistische-data-tot-2017)).
+  * BAG of Nijmegen dataset  ([Link](https://www.nijmegen.nl/opendata/BAG_ADRES.csv)).
+  * Public artworks of Nijmegen dataset  ([Link](https://www.nijmegen.nl/kos/opendata/)).
+
+These last two datasets have been combined in Assignment 3 Part B. I will therefore not explain here how that was done in this blogpost. If you are interested to know how it was done please visit this [link](https://github.com/rubigdata/spark-2019/blob/master/BigData-open-data-Nijmegen.snb.ipynb).
