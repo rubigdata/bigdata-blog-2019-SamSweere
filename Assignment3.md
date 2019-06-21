@@ -81,11 +81,8 @@ It is clear that the subject are verry diverse, from etnicity to non-working job
 Before we start working with the dataset more we first need some goals for this project in increasing difficulty:
   * In which neighborhood in Nijmegen do most youth (age <= 18) live in the year 2012?
   * What is the richest neighboorhood in Nijmegen based on income?
-  * Is there a correlation between the income of a neighboorhood and the ammount of public artworks within that nieghboorhood?
 
 ## Preprocessing the database 
-
-
 
 The dataset is structured around a set of subjects, these subject apply to specific neighoorhoods in Nijmegen in a specific year. First we need to preprocess the database such that it is easer to work with. In the structure it is shown that there is a column called `TijdType` (Time type) and `TijdOmschrijving` (Time description) let see what they mean. By running:
 
@@ -106,7 +103,7 @@ There are thus three time types, lets see what kind of time description format i
 ```scala
 std.select('TijdType, 'TijdOmschrijving).groupBy("TijdType").agg(first("TijdOmschrijving")).show
 ```
-Results in.
+Results in:
 ```
 +------------+------------------------------+
 |    TijdType|first(TijdOmschrijving, false)|
@@ -122,7 +119,7 @@ First we are going to look at the `Schooljaar` time type, since there are only 1
 ```scala
 std.filter("TijdType = 'Schooljaar'").groupBy("OnderwerpNaam").count().show
 ```
-Results
+Results:
 ```
 +-------------+-----+
 |OnderwerpNaam|count|
@@ -135,7 +132,7 @@ The subject `Huursubsidie` is not interesting for our research. Thus to make thi
 ```scala
 std.filter("TijdType = 'Peildatum'").groupBy("OnderwerpNaam").count().show
 ```
-Results
+Results:
 ```
 +--------------------+------+
 |       OnderwerpNaam| count|
@@ -189,7 +186,7 @@ Lets see if this transformation resulted in a format we can work easier with:
 nijmData.printSchema
 nijmData.describe().show
 ```
-Results
+Results:
 ```
 root
  |-- value: float (nullable = false)
@@ -327,7 +324,7 @@ Lets first see what years have income data:
 ```scala
 nijmData.filter($"subject".contains("Inkomen")).groupBy("year").count().show()
 ```
-Returns
+Returns:
 ```
 +----+-----+
 |year|count|
@@ -351,7 +348,7 @@ var incomeQuarters = nijmData.filter("year = 2009")
 
 incomeQuarters.orderBy(desc("Average income")).show(10)
 ```
-Results
+Results:
 ```
 +------------+--------------+
 |     quarter|Average income|
@@ -369,13 +366,3 @@ Results
 +------------+--------------+
 ```
 Thus the richest neighboorhood in Nijmegen is Kwakkenberg.
-
-## Correlation income and public art
-The last goal: Is there a correlation between the income of a neighboorhood and the ammount of public artworks within that nieghboorhood? I will also take the year 2009 for this goal.
-
-In order to be able to answer this goal we need to combine three datasets:
-  * The dataset we have been working on thusfar: The statistical dataset until 2017 from the province of Nijmegen ([Link](https://opendata.nijmegen.nl/dataset/statistische-data-tot-2017)).
-  * BAG of Nijmegen dataset  ([Link](https://www.nijmegen.nl/opendata/BAG_ADRES.csv)).
-  * Public artworks of Nijmegen dataset  ([Link](https://www.nijmegen.nl/kos/opendata/)).
-
-These last two datasets have been combined in Assignment 3 Part B. I will therefore not explain here how that was done in this blogpost. If you are interested to know how it was done please visit this [link](https://github.com/rubigdata/spark-2019/blob/master/BigData-open-data-Nijmegen.snb.ipynb).
