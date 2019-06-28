@@ -163,26 +163,27 @@ Returns:
 To bad, no free steam codes in this segment. This is not too surprising if we thing about how often these would appear and how big of a segment of the internet we have scanned (1/56000). For this project to work we should scan a significant part of the CommonCrawl, this is not feasable on one computer with a normal internet connection. We could try to make it a standalone application and scan a bigger part of the commoncrawl, but I think we can find more interesting information from the dataset. Let's see this as a warmup for a harder challenge!
 
 # Visualizing the location where hosting servers reside in the world
-Locate IP adresses of the server
+Evey website needs a hosting server, this server has a IP address at which it can be reached. For IP addresses there is a way to roughly estimate their location in the world. The goal of this challange is to map these locations.
+
+## General pipline
+To acchieve this the following steps have to be done:
+- Extract the IP address and URL from the commoncrawl. 
+- Check using the URL if we already encoutered this website, we do not want to include the ammount of pages a site has in our map. However I am not sure if multiple websites can be hosted on a similar IP address or if a site can be hosted on multiple IP addresses, therefore we will make use we only counting one site using the URL. 
+- Find the geo-location of the IP adress.
+- Generate a map of these geo-location counts.
+- Bonus: find a correlation between URL country codes (.nl, .com, etc.. ) and where they are hosted.
 
 
-We only need the ip and the url adress, not the other information. Thus the wat information is enough, this is at the same time also a bit smaller size per website.
-
-Take the first segment of the May 2019 crawl
+## Retrieving the commoncrawl segments
+In this challenge we only need the IP address and the URL, not the contens of the websites. Thus in this case the WAT format is ideal, this is at the same time also a bit smaller size (+- 300 MiB per segment instead of +- 900 MiB) making the calculations a bit faster. In order to be able to scan a bigger part of the commoncrawl dataset we will include the retrieving of the segments in the code. The idea is that every iteration the Spark program will download a segment, retrieve the locations, detelete the segment and downlaod the next segment. When looking at the first two segments of the May 2019 crawl one could think we could iterate over the last number:
 ```
 crawl-data/CC-MAIN-2019-22/segments/1558232254253.31/wat/CC-MAIN-20190519061520-20190519083520-00000.warc.wat.gz
+
+and
+
+crawl-data/CC-MAIN-2019-22/segments/1558232254253.31/wat/CC-MAIN-20190519061520-20190519083520-00001.warc.wat.gz
 ```
-Instead of downloading the file, lets load it straight into memory:
-
-
-
-
-https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2019-22/segments/1558232254253.31/wat/CC-MAIN-20190519061520-20190519083520-00000.warc.wat.gz
-
-
-You think you can just save as segments `00000`, `00001`, etc..
-But this is not the case since the path is longer:
-
+But this is not the case since the path is longer see:
 ```
 crawl-data/CC-MAIN-2019-22/segments/1558232254253.31/warc/CC-MAIN-20190519061520-20190519083520-00000.warc.gz
 
@@ -190,19 +191,111 @@ and
 
 crawl-data/CC-MAIN-2019-22/segments/1558232254731.5/warc/CC-MAIN-20190519081519-20190519103519-00000.warc.gz
 ```
-Are both segment `00000`.
+Both end with `00000`. The fix is to load the WAT path file that is available on the commoncrawl site.
+Lets start with creating a function that can download the files:
+```scala
+def fileDownloader(url: String, filename: String) = {
+    new URL(url) #> new File(filename) !!
+}
+```
+Download the WAT paths and put every line into a array such that we can iterate over the array:
+```scala
+//Get the segment paths
+val watPathsUrl = "https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2019-22/wat.paths.gz"
 
-Thus save the files as the name but replace ever `/` with a `-`
+fileDownloader(watPathsUrl, "wat.paths.gz")
 
+var in = new GZIPInputStream(new FileInputStream("wat.paths.gz"))
+var watSegments = ArrayBuffer[String]()
 
-### To get a feeling of the data lets have a look at 
+//Save every line as an element of the array
+for (line <- Source.fromInputStream(in).getLines()) {
+        watSegments += line
+}
+```
+For testing purposes lets download the first segment:
+```scala
+val segNum = 0
+val commonCrawlUrl = "https://commoncrawl.s3.amazonaws.com/" + watSegments(segNum)
 
+//Replace / with - to prevent errors in filenames
+val watfile = watSegments(segNum).replace('/', '-')
+
+//Download the segment file
+fileDownloader(commonCrawlUrl, watfile)
+```
+Initialy I used the surfsara `WarcInputFormat` package as a did in the previous part, however when we check for IP addresses we encounter some problems:
+```scala
+warc.map{wr => wr._2.header}.filter{_.warcIpAddress.length() != 0}.map{x => (x.warcInetAddress, x.warcIpAddress)}.take(100)
+```
+Crashes for some reason, and:
+```scala
+warc.map{wr => wr._2.header}.map{x => (x.warcInetAddress, x.warcIpAddress)}.take(100)
+```
+Returns:
+```
+res41: Array[(java.net.InetAddress, String)] = Array((null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (null,null), (nu...
+```
+Are the IP addresses not in the data? This seems weird, lets check the raw WAT data:
+```
+WARC/1.0
+WARC-Type: metadata
+WARC-Target-URI: CC-MAIN-20190519061520-20190519083520-00000.warc.gz
+WARC-Date: 2019-05-27T15:39:42Z
+WARC-Record-ID: <urn:uuid:ff1fc925-50c3-4be6-87d7-bc9571aaf91a>
+WARC-Refers-To: <urn:uuid:ebb601fe-1e84-4e78-8104-902709383f99>
+Content-Type: application/json
+Content-Length: 1264
+
+{"Container":{"Filename":"CC-MAIN-20190519061520-20190519083520-00000.warc.gz","Compressed":true,"Offset":"0","Gzip-Metadata":{"Inflated-Length":"762","Footer-Length":"8","Inflated-CRC":"901400670","Deflate-Length":"479","Header-Length":"10"}},"Envelope":{"Format":"WARC","WARC-Header-Length":"259","Actual-Content-Length":"499","WARC-Header-Metadata":{"WARC-Filename":"CC-MAIN-20190519061520-20190519083520-00000.warc.gz","WARC-Date":"2019-05-19T06:15:20Z","Content-Length":"499","WARC-Record-ID":"<urn:uuid:ebb601fe-1e84-4e78-8104-902709383f99>","WARC-Type":"warcinfo","Content-Type":"application/warc-fields"},"Block-Digest":"sha1:TXLBXTMEZERZXSLH3Y623RTVZWE5XK5Z","Payload-Metadata":{"Actual-Content-Type":"application/warc-fields","Actual-Content-Length":"499","Trailing-Slop-Length":"0","WARC-Info-Metadata":{"hostname":"ip-10-142-79-158.ec2.internal","software":"Apache Nutch 1.15 (modified, https://github.com/commoncrawl/nutch/)","format":"WARC File Format 1.1","publisher":"Common Crawl","description":"Wide crawl of the web for May 2019","robots":"checked via crawler-commons 1.1-SNAPSHOT (https://github.com/crawler-commons/crawler-commons)","isPartOf":"CC-MAIN-2019-22","operator":"Common Crawl Admin (info@commoncrawl.org)"},"Headers-Corrupt":true}}}
+```
+I clearly see IP addresses, but I used all the IP commands the `WarcHeader` has. When investigating more I could not find any documentation on the commands possible for `WarcInputFormat`, so after a few frustrating hours I decided to do the parsing myself. The seccond part of the raw WAT data is saved in the JSON format. Lets first filter the WAT data to only have the JSON parts
+
+We need to start a sql SparkSession to read a file:
+```scala
+import org.apache.spark.sql.SparkSession
+val spark: SparkSession = SparkSession.builder.master("local").getOrCreate
+```
+We can now read the WAT file, since we only want the json part we filter on lines that start with `"{\"Container\":"`, where the `\"` are used to escape the chars, otherwise Scala would think the String would stop at `"`. Next parse the JSON files:
+```scala
+//Get all the json files and parse them
+val watJsonStr = spark.read.textFile(watfile).filter(x => x.startsWith("{\"Container\":"))
+val wat = spark.read.json(watJsonStr).cache()
+```
+To check if we where succesfull we can check the schema:
+```scala
+wat.printSchema
+```
+Returns:
+```
+root
+ |-- Container: struct (nullable = true)
+ |    |-- Compressed: boolean (nullable = true)
+ |    |-- Filename: string (nullable = true)
+ |    |-- Gzip-Metadata: struct (nullable = true)
+ |    |    |-- Deflate-Length: string (nullable = true)
+ |    |    |-- Footer-Length: string (nullable = true)
+ |    |    |-- Header-Length: string (nullable = true)
+ |    |    |-- Inflated-CRC: string (nullable = true)
+ |    |    |-- Inflated-Length: string (nullable = true)
+ |    |-- Offset: string (nullable = true)
+ |-- Envelope: struct (nullable = true)
+ |    |-- Actual-Content-Length: string (nullable = true)
+ |    |-- Block-Digest: string (nullable = true)
+ |    |-- Format: string (nullable = true)
+ ...
+```
+Good news, we have data we can search through!
+
+## Retrieving the URL and Ip address
 
 
 
 ## Problems
 
-`warc.take(10)` crashes the kernel, very impractical
+
+
+`warc.take(10)` crashes the kernel, very impractical.
 
 
 There is no place where is stored what the warcTypeIdx number map to, very bad documentation. Found it by
