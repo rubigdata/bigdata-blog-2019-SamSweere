@@ -471,9 +471,33 @@ sortedCountry.show()
 ```
 Returns:
 ```
-Something
++--------------+-----------------+
+|  country_name|count(IP-Address)|
++--------------+-----------------+
+| United States|            14794|
+|       Germany|             3213|
+|        Russia|             1805|
+|         Japan|             1484|
+|        France|             1420|
+|United Kingdom|             1116|
+|   Netherlands|             1115|
+|         China|              721|
+|         Italy|              648|
+|        Canada|              598|
+|         Spain|              557|
+|        Poland|              522|
+|       Czechia|              455|
+|       Ireland|              395|
+|     Hong Kong|              348|
+|       Ukraine|              341|
+|     Australia|              295|
+|        Turkey|              291|
+|   South Korea|              268|
+|        Brazil|              264|
++--------------+-----------------+
 ```
 
+Surprisingly the Netherlands is higher in the list than China. Of course since we only analyze one segment the results do not generalize. Since there is a chance that the data is sorted, in this case it could be that Chinese sites possibly use more symbols that are higher in the sorting rank.
 Done with this section!
 
 ## Standalone Spark application
@@ -510,17 +534,40 @@ We can now run this using:
 ```
 docker run --rm --name serverlocation -e ENABLE_INIT_DAEMON=false --network spark-net serverlocation/spark-app
 ```
-Since the calculation time takes ages I will give an update when it is done.
+Returning of course the same result:
+```
++--------------+-----------------+
+|  country_name|count(IP-Address)|
++--------------+-----------------+
+| United States|            14794|
+|       Germany|             3213|
+|        Russia|             1805|
+|         Japan|             1484|
+|        France|             1420|
+|United Kingdom|             1116|
+|   Netherlands|             1115|
+|         China|              721|
+|         Italy|              648|
+|        Canada|              598|
+|         Spain|              557|
+|        Poland|              522|
+|       Czechia|              455|
+|       Ireland|              395|
+|     Hong Kong|              348|
+|       Ukraine|              341|
+|     Australia|              295|
+|        Turkey|              291|
+|   South Korea|              268|
+|        Brazil|              264|
++--------------+-----------------+
+```
 
 ## Time to complete calculation
-One calculation in the notebook did complete:
-```scala
-val perCountry = ipCountryIP.select("country_name","IP-Address").groupBy("country_name").agg(count("IP-Address"))
-```
-```
-Took: 6h16m31.484s
-```
-This is on a pc running an Ryzen 2700x making constant use of 8 cores (8 threads). It seems a bit slow for what it has to do, my intuition is that a simple python program would crush this time. I have a feeling that the line:
+Comparison between notebook and standalone Spark application:
+- Spark notebook: The calculation took `2h41m50.793s`.
+- Standalone Spark application: The calculation took `6h12m27s`.
+
+This is on a pc running an Ryzen 2700x with 8 cores (16 threads). It seems a bit slow for what it has to do, my intuition is that a simple python program would crush this time. I have a feeling that the line:
 
 ```scala
 val ipCountryIP = ipCountry.join(selection, 
@@ -529,6 +576,11 @@ val ipCountryIP = ipCountry.join(selection,
                "left")
 ```
 Is tremendously inefficient, since it checks the whole dataframe for every unique IP-address. The problem is that normally I would solve this with a for loop, however since Spark is distributed and we are working with a functional programming language for loops are not the way to go. But I am sure this could be improved.
+
+There are also some other things I noticed:
+- The cpu was barely stressed, in both scenarios it was only using about 25%. The scenario could be that the cpu was not the bottleneck.
+- The standalone Spark application often gave the message that files where to big to store in memory and that it therefore would use the disk (ssd in my case) instead. This could be the reason why the standalone application took more than twice the time to complete. An idea would be to give the slaves more memory.
+
 
 
 ## Problems
